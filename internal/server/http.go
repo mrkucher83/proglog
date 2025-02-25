@@ -2,12 +2,25 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/gorilla/mux"
 	"net/http"
 )
 
 type httpServer struct {
 	Log *Log
+}
+
+func NewHttpServer(addr string) *http.Server {
+	server := newHTTPServer()
+	r := mux.NewRouter()
+	r.HandleFunc("/", server.handleProduce).Methods("POST")
+	r.HandleFunc("/", server.handleConsume).Methods("GET")
+
+	return &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
 }
 
 func newHTTPServer() *httpServer {
@@ -47,11 +60,11 @@ func (c *httpServer) handleConsume(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rec, err := c.Log.Read(req.Offset)
-	if err == ErrorOffsetNotFound {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
 	if err != nil {
+		if errors.Is(err, ErrorOffsetNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -78,16 +91,4 @@ type ConsumeRequest struct {
 
 type ConsumeResponse struct {
 	Record Record `json:"record"`
-}
-
-func NewHttpServer(addr string) *http.Server {
-	server := newHTTPServer()
-	r := mux.NewRouter()
-	r.HandleFunc("/", server.handleProduce).Methods("POST")
-	r.HandleFunc("/", server.handleConsume).Methods("GET")
-
-	return &http.Server{
-		Addr:    addr,
-		Handler: r,
-	}
 }
